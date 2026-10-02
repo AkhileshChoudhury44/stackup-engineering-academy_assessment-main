@@ -1,4 +1,8 @@
-# Python
+# =============================================================
+# Presight / StackUp Engineering Academy — gitignore
+# =============================================================
+
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
 *.pyo
@@ -17,42 +21,36 @@ venv/
 .venv/
 env/
 .env
-
-# Environment variables
 .env.local
 .env.*.local
 
-# Outputs — candidates generate these locally, they should not be committed
-outputs/
-!outputs/.gitkeep
-
-# Spark
+# Spark runtime & metastore
 derby.log
 metastore_db/
 spark-warehouse/
 
-# Airflow
+# Airflow logs and local db
 logs/
 airflow.db
 airflow.cfg
 webserver_config.py
 standalone_admin_password.txt
 
-# Jupyter
+# Jupyter checkpoints
 .ipynb_checkpoints/
-*.ipynb
 
-# IDE
+# IDE & OS temporary files
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
 Thumbs.db
+ehthumbs.db
 
-# Docker
+# Docker & generic logs
 *.log
+docker-compose.override.yml.bak
 
-# Solutions (do not commit solutions)
-solutions/*
-!solutions/.gitkeep
+# Database lock and WAL files
+*.duckdb.wal
