@@ -1,0 +1,56 @@
+# =============================================================
+# Presight / StackUp Engineering Academy — .gitignore
+# =============================================================
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+.env.local
+.env.*.local
+
+# Spark runtime & metastore
+derby.log
+metastore_db/
+spark-warehouse/
+
+# Airflow logs and local db
+logs/
+airflow.db
+airflow.cfg
+webserver_config.py
+standalone_admin_password.txt
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# IDE & OS temporary files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Docker & generic logs
+*.log
+docker-compose.override.yml.bak
+
+# Database lock and WAL files
+*.duckdb.wal

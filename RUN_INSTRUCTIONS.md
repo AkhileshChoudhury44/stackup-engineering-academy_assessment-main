@@ -129,7 +129,8 @@ duckdb presight_warehouse.duckdb -f "solutions/submissions/Akhilesh/02_sql_and_v
 
 ### 6.4 Power BI Dashboard
 Open in Power BI Desktop (Windows):
-- `solutions/submissions/Akhilesh/02_sql_and_viz/2.4_Dashboard.pbix`
+- Primary file: `solutions/submissions/Akhilesh/02_sql_and_viz/2.4_Dashboard.pbix`
+- Mirrored output: `outputs/presight_dashboard.pbix` (per Task 2.4 specification)
 
 ---
 
@@ -249,18 +250,17 @@ docker-compose run etl
 ### 8.3 Data Governance Documentation
 Review the comprehensive 45-column compliance document (UAE PDPL & GDPR):
 - Primary artifact: `outputs/data_governance_document.md`
-- Source file: `solutions/submissions/Akhilesh/04_infrastructure/4.3_data_governance_document.md`
+- Source file: `solutions/submissions/Akhilesh/04_infrastructure/data_governance_document.md` (and `4.3_data_governance_document.md`)
 
 ---
 
 ## 9. Inspect Generated Outputs
 
 All solution artifacts are organized by pillar:
-- `outputs/results/Akhilesh/01_foundations/`
-- `outputs/results/Akhilesh/02_sql_and_viz/`
-- `outputs/results/Akhilesh/03_big_data/`
-- `outputs/results/Akhilesh/04_infrastructure/`
-- `outputs/data_governance_document.md`
+- `outputs/results/Akhilesh/01_foundations/` (and root `outputs/projects_clean.csv`, `employees_clean.csv`)
+- `outputs/results/Akhilesh/02_sql_and_viz/` (and root `outputs/transactions_clean.csv`, `pipeline_summary.txt`, `presight_dashboard.pbix`)
+- `outputs/results/Akhilesh/03_big_data/` (and Parquet tables in `spark/`, root `outputs/kafka/summary.json`, `pipeline_report_*.txt`)
+- `outputs/results/Akhilesh/04_infrastructure/` (and root `outputs/data_governance_document.md`, `dq_report_*.md`)
 
 ---
 

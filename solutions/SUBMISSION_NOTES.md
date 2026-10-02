@@ -18,11 +18,12 @@ All tasks across the four pillars (from **1.1 through 4.3**) have been reviewed,
 | **Pillar 2** | **2.1** | Six analytical business queries with window functions & SCD2 current flags | [`submissions/Akhilesh/02_sql_and_viz/2.2_queries.sql`](submissions/Akhilesh/02_sql_and_viz/2.2_queries.sql) | **Verified** |
 | | **2.2** | Full 50K transactions ETL with dimensional enrichment in ~1.5s (< 30s SLA) | [`submissions/Akhilesh/02_sql_and_viz/2.1_etl_full.py`](submissions/Akhilesh/02_sql_and_viz/2.1_etl_full.py) | **Verified** |
 | | **2.3** | Query optimization with EXPLAIN bottleneck breakdown, CTE isolation & composite indexing | [`submissions/Akhilesh/02_sql_and_viz/2.3_Explain.sql`](submissions/Akhilesh/02_sql_and_viz/2.3_Explain.sql) | **Verified** |
+| | **2.4** | Executive Project Spend Performance Power BI Dashboard | [`submissions/Akhilesh/02_sql_and_viz/2.4_Dashboard.pbix`](submissions/Akhilesh/02_sql_and_viz/2.4_Dashboard.pbix) | **Verified** |
 | **Pillar 3** | **3.1** | PySpark distributed pipeline (100K events → 5 Parquet tables), explicit UTC timezone & 1:1 escalation matching | [`submissions/Akhilesh/03_big_data/3.1_spark_events_pipeline.py`](submissions/Akhilesh/03_big_data/3.1_spark_events_pipeline.py) | **Verified** |
 | | **3.2** | Kafka streaming with 50ms throughput simulation & Critical escalation topic routing | [`submissions/Akhilesh/03_big_data/3.2_kafka_streaming.py`](submissions/Akhilesh/03_big_data/3.2_kafka_streaming.py) | **Verified** |
 | | **3.3** | Airflow DAG with meaningful pre-clean DQ gate, real ETL transformations (no dropna shortcuts) | [`submissions/Akhilesh/03_big_data/3.3_airflow_dag.py`](submissions/Akhilesh/03_big_data/3.3_airflow_dag.py) | **Verified** |
 | **Pillar 4** | **4.1** | Multi-stage Docker containerization with pinned minimal dependencies (< 250MB) | [`submissions/Akhilesh/04_infrastructure/4.1_Dockerfile`](submissions/Akhilesh/04_infrastructure/4.1_Dockerfile) | **Verified** |
-| | **4.2** | Enterprise Data Governance Document cataloging all 45 canonical columns (UAE PDPL & GDPR) | [`submissions/Akhilesh/04_infrastructure/4.3_data_governance_document.md`](submissions/Akhilesh/04_infrastructure/4.3_data_governance_document.md) | **Verified** |
+| | **4.2** | Enterprise Data Governance Document cataloging all 45 canonical columns (UAE PDPL & GDPR) | [`submissions/Akhilesh/04_infrastructure/data_governance_document.md`](submissions/Akhilesh/04_infrastructure/data_governance_document.md) | **Verified** |
 | | **4.3** | Configurable Data Quality Framework across 6 dimensions on raw and transformed data | [`submissions/Akhilesh/04_infrastructure/4.2_dq_framework.py`](submissions/Akhilesh/04_infrastructure/4.2_dq_framework.py) | **Verified** |
 
 ---
@@ -61,6 +62,9 @@ All tasks across the four pillars (from **1.1 through 4.3**) have been reviewed,
 ### 2.6 Minimal Pinned Docker Container & Compose Override (Task 4.1 Bonus)
 * Pinned lightweight dependencies in `solutions/submissions/Akhilesh/04_infrastructure/requirements.txt` (`pandas==2.2.2`, `numpy==1.26.4`, `duckdb==0.10.2`), reducing the multi-stage container footprint from > 2 GB down to < 250 MB.
 * **Docker Compose Override (`docker-compose.override.yml`):** Added compose override allowing the entire ETL service to be launched via a single command: `docker-compose run etl`. Handles volume mounting directly to `./outputs` on the host with `user: "0:0"` (root) to ensure flawless write permissions.
+
+### 2.7 Executive Power BI Dashboard (Task 2.4)
+* **Interactive Analytical Dashboard:** Delivered via `solutions/submissions/Akhilesh/02_sql_and_viz/2.4_Dashboard.pbix`. Visualizes portfolio budget utilization (482.88M AED budget vs 406.86M actuals), department spend vs budget, 50,000 transactions across 12 categories, top 10 project variances, and vendor concentration risk (< 5% threshold).
 
 ---
 

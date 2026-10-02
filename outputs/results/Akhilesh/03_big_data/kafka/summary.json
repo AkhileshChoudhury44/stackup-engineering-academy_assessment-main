@@ -1,5 +1,5 @@
 {
-  "run_timestamp": "2026-10-02T14:29:45.501698+00:00",
+  "run_timestamp": "2026-10-02T15:45:05.997064+00:00",
   "total_messages_consumed": 1000,
   "event_type_counts": {
     "login": 248,
@@ -19,5 +19,5 @@
     "milestone_reached": 2
   },
   "critical_escalations_forwarded": 2,
-  "throughput_messages_per_second": 7849.71
+  "throughput_messages_per_second": 8228.24
 }
