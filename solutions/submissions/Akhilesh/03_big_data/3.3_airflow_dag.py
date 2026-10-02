@@ -331,20 +331,36 @@ def task_transform_and_enrich(**context):
     e_df["dq_self_manager"] = e_df["employee_id"] == e_df["manager_id"]
     e_df.loc[e_df["dq_self_manager"], "manager_id"] = "EMP0000"
 
-    # Outlier salary remediation
-    sal_outlier = (e_df["level"] == "Junior") & (e_df["salary"] > 50000)
+    # Outlier salary remediation (Junior salary > 50k or Director salary < 25k)
+    sal_outlier = ((e_df["level"] == "Junior") & (e_df["salary"] > 50000)) | \
+                  ((e_df["level"] == "Director") & (e_df["salary"] < 25000))
     e_df["dq_salary_outlier"] = sal_outlier
     if sal_outlier.sum() > 0:
-        e_df.loc[sal_outlier, "salary"] = int(e_df.loc[e_df["level"] == "Junior", "salary"].median())
-    e_df["dq_status_conflict"] = False
+        for lvl in e_df.loc[sal_outlier, "level"].unique():
+            lvl_med = e_df.loc[e_df["level"] == lvl, "salary"].median()
+            e_df.loc[sal_outlier & (e_df["level"] == lvl), "salary"] = int(lvl_med)
 
-    # Retain strictly the 12 canonical columns
-    canonical_employee_cols = [
+    # Status conflict remediation:
+    # 1. Inactive employees actively managing live projects
+    # 2. Future hire dates marked as Active
+    p_active_mgrs = set(p_df[p_df["status_category"] == "Active"]["project_manager_id"].dropna().unique())
+    inactive_mgr_conflict = e_df["employee_id"].isin(p_active_mgrs) & (e_df["status"].astype(str).str.strip().str.title() == "Inactive")
+    future_hire_conflict = (parsed_dates > pd.Timestamp.now()) & (e_df["status"].astype(str).str.strip().str.title() == "Active")
+    status_conflict = inactive_mgr_conflict | future_hire_conflict
+    e_df["dq_status_conflict"] = status_conflict
+    if status_conflict.sum() > 0:
+        e_df.loc[inactive_mgr_conflict, "status"] = "Active"
+        e_df.loc[future_hire_conflict, "status"] = "Pending"
+
+    # Retain the 12 canonical columns PLUS explicit audit flag columns
+    output_employee_cols = [
         "employee_id", "full_name", "email", "department", "role",
         "level", "hire_date", "salary", "manager_id", "region",
-        "status", "years_experience"
+        "status", "years_experience",
+        "dq_missing_email", "dq_invalid_hire_date", "dq_negative_experience",
+        "dq_self_manager", "dq_salary_outlier", "dq_status_conflict"
     ]
-    e_df = e_df[canonical_employee_cols]
+    e_df = e_df[output_employee_cols]
 
     # ── 3. Transactions Vectorized Enrichment ────────────────────────────────
     with open(os.path.join(DATA_DIR, "transactions.json"), "r", encoding="utf-8") as f:

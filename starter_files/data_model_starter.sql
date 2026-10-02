@@ -163,72 +163,103 @@ FROM read_csv_auto('datasets/projects.csv')
 ON CONFLICT (project_id) DO NOTHING;
 
 -- 3. Employees SCD Type 2 Dim
-WITH raw_history AS (
-    SELECT
-        h.employee_id,
-        COALESCE(e.full_name, 'Staff Member') AS full_name,
-        COALESCE(e.email, 'unknown@presight.ai') AS email,
-        h.department,
-        h.role,
-        h.level,
-        CAST(h.salary AS NUMERIC(12,2)) AS salary,
-        h.manager_id,
-        COALESCE(e.region, 'Abu Dhabi') AS region,
-        COALESCE(TRY_CAST(e.years_experience AS INT), 0) AS years_experience,
-        CAST(h.effective_date AS DATE) AS valid_from,
-        CAST(h.end_date AS DATE) AS valid_to,
-        FALSE AS is_current,
-        COALESCE(h.change_reason, 'Historical Revision') AS change_reason
-    FROM read_csv_auto('datasets/employees_salary_history.csv') h
-    LEFT JOIN read_csv_auto('datasets/employees.csv') e ON h.employee_id = e.employee_id
-),
-history_latest AS (
-    SELECT employee_id, MAX(valid_to) AS max_history_end
-    FROM raw_history
-    GROUP BY employee_id
-),
-current_records AS (
-    SELECT
-        e.employee_id,
-        e.full_name,
-        e.email,
+WITH history_records AS (
+    SELECT 
+        h.employee_id, 
+        COALESCE(e.full_name, 'Staff Member') AS full_name, 
+        COALESCE(e.email, 'unknown@presight.ai') AS email, 
         e.department,
-        e.role,
-        e.level,
-        CAST(e.salary AS NUMERIC(12,2)) AS salary,
-        e.manager_id,
-        e.region,
-        ABS(COALESCE(TRY_CAST(e.years_experience AS INT), 0)) AS years_experience,
-        COALESCE(hl.max_history_end, TRY_CAST(e.hire_date AS DATE), DATE '2020-01-01') AS valid_from,
-        DATE '9999-12-31' AS valid_to,
-        TRUE AS is_current,
-        'Current Position' AS change_reason
-    FROM read_csv_auto('datasets/employees.csv') e
-    LEFT JOIN history_latest hl ON e.employee_id = hl.employee_id
+        h.new_role AS role, 
+        h.new_level AS level, 
+        CAST(h.new_salary AS NUMERIC(12,2)) AS salary,
+        e.manager_id, 
+        COALESCE(e.region, 'Abu Dhabi') AS region, 
+        ABS(COALESCE(TRY_CAST(e.years_experience AS INT), 0)) AS years_experience, 
+        CAST(h.effective_date AS DATE) AS valid_from,
+        COALESCE(h.change_reason, 'Historical Revision') AS change_reason
+    FROM read_csv_auto('datasets/employees_salary_history.csv') h 
+    JOIN read_csv_auto('datasets/employees.csv') e USING (employee_id)
 ),
-all_scd2 AS (
-    SELECT * FROM raw_history
-    UNION ALL
-    SELECT * FROM current_records
+latest_history AS (
+    SELECT 
+        employee_id,
+        CAST(new_salary AS NUMERIC(12,2)) AS latest_salary,
+        new_role AS latest_role,
+        new_level AS latest_level,
+        CAST(effective_date AS DATE) AS latest_effective_date,
+        ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY CAST(effective_date AS DATE) DESC) AS rn
+    FROM read_csv_auto('datasets/employees_salary_history.csv')
+),
+employees_without_history AS (
+    SELECT 
+        e.employee_id, 
+        e.full_name, 
+        e.email, 
+        e.department, 
+        e.role, 
+        e.level, 
+        CAST(e.salary AS NUMERIC(12,2)) AS salary, 
+        e.manager_id, 
+        e.region, 
+        ABS(COALESCE(TRY_CAST(e.years_experience AS INT), 0)) AS years_experience,
+        COALESCE(TRY_CAST(e.hire_date AS DATE), DATE '2020-01-01') AS valid_from,
+        'Initial Hire' AS change_reason
+    FROM read_csv_auto('datasets/employees.csv') e 
+    WHERE e.employee_id NOT IN (SELECT DISTINCT employee_id FROM history_records)
+),
+unrecorded_current_changes AS (
+    SELECT 
+        e.employee_id, 
+        e.full_name, 
+        e.email, 
+        e.department, 
+        e.role, 
+        e.level, 
+        CAST(e.salary AS NUMERIC(12,2)) AS salary, 
+        e.manager_id, 
+        e.region, 
+        ABS(COALESCE(TRY_CAST(e.years_experience AS INT), 0)) AS years_experience,
+        lh.latest_effective_date + INTERVAL '1 DAY' AS valid_from,
+        'Current Position' AS change_reason
+    FROM read_csv_auto('datasets/employees.csv') e 
+    JOIN latest_history lh 
+      ON e.employee_id = lh.employee_id 
+     AND lh.rn = 1
+    WHERE CAST(e.salary AS NUMERIC(12,2)) <> lh.latest_salary
+       OR e.role <> lh.latest_role
+       OR e.level <> lh.latest_level
+),
+all_snapshots AS (
+    SELECT * FROM history_records 
+    UNION ALL 
+    SELECT * FROM employees_without_history
+    UNION ALL 
+    SELECT * FROM unrecorded_current_changes
+),
+dated_versions AS (
+    SELECT 
+        *, 
+        LEAD(valid_from) OVER (PARTITION BY employee_id ORDER BY valid_from) AS next_valid_from
+    FROM all_snapshots
 )
 INSERT INTO dim_employee
-SELECT
+SELECT 
     ROW_NUMBER() OVER (ORDER BY employee_id, valid_from) AS employee_key,
-    employee_id,
-    full_name,
-    email,
-    department,
-    role,
-    level,
-    salary,
-    manager_id,
-    region,
-    years_experience,
+    employee_id, 
+    full_name, 
+    email, 
+    department, 
+    role, 
+    level, 
+    salary, 
+    manager_id, 
+    region, 
+    years_experience, 
     valid_from,
-    valid_to,
-    is_current,
+    COALESCE(next_valid_from, DATE '9999-12-31') AS valid_to,
+    next_valid_from IS NULL AS is_current, 
     change_reason
-FROM all_scd2
+FROM dated_versions
 ON CONFLICT (employee_key) DO NOTHING;
 
 -- 4. Vendor Dim
