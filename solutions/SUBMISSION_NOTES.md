@@ -30,16 +30,18 @@ All tasks across the four pillars (from **1.1 through 4.3**) have been reviewed,
 
 ## 2. Key Architectural Remediations & Technical Innovations
 
-### 2.1 SCD Type 2 Star Schema & Closed-Open Interval Join (Task 1.2)
-* **Pure SQL Generation:** `dim_employee` SCD Type 2 history is populated directly via ANSI SQL CTEs (`raw_history` UNION ALL `current_records`), eliminating procedural loops.
+### 2.1 SCD Type 2 Star Schema & Closed-Open Interval Join (Tasks 1.2 & 2.2)
+* **Kimball-Compliant Pure SQL Generation:** Populates `dim_employee` SCD Type 2 history directly via ANSI SQL CTEs (`history_records`, `employees_without_history`, and defensive `unrecorded_current_changes`), eliminating procedural loops.
+* **Elimination of Redundant 1-Day Ghost Snapshots:** Unlike naive union approaches that append `employees.csv` with `latest_effective_date + INTERVAL 1 DAY` (creating artificial 1-day identical records because `employees_salary_history.csv` already contains the latest promotion), our architecture reconciles history directly, ensuring each version represents a genuine attribute state change.
 * **Level & Role History:** Tracks historical `level` (Junior → Mid promotions) alongside salary and role changes.
-* **Elimination of Duplicate Fact Transactions:** In `fact_transactions`, the join to `dim_employee` uses a closed-open interval:
+* **Elimination of Boundary Dropouts & Duplicate Fact Transactions:** Both `1.2_data_model.sql` and `2.2_queries.sql` strictly standardize on Kimball closed-open intervals `[valid_from, valid_to)` where `valid_to = COALESCE(LEAD(valid_from), '9999-12-31')`. Fact table transactions are joined via:
   ```sql
   ON t.approved_by = e.employee_id
   AND TRY_CAST(t.transaction_date AS DATE) >= e.valid_from
   AND TRY_CAST(t.transaction_date AS DATE) < e.valid_to
   ```
-  Replacing `BETWEEN` with `< e.valid_to` completely eliminates the 29 duplicated transactions caused by overlapping boundary dates.
+  This eliminates duplicate fact joins (from `BETWEEN`) and completely resolves boundary dropouts (from naive `valid_to - INTERVAL 1 DAY`).
+* **Validation Query Suite:** Confirmed with 4 automated integrity queries in `1.2_data_model.sql`: (1) exactly 1 current record per employee, (2) realistic version counts (1 to 5), (3) zero interval overlaps via self-join, and (4) zero redundant adjacent versions with identical attributes.
 
 ### 2.2 Vectorized Cleaning & Collision-Free Email Generation (Tasks 1.1 & 1.3)
 * **Explicit DQ Audit Flags:** Rather than silently replacing values, boolean audit columns (`dq_missing_email`, `dq_invalid_hire_date`, `dq_negative_experience`, `dq_self_manager`, `dq_salary_outlier`, `dq_status_conflict`) are explicitly retained on `employees_clean.csv`.
@@ -110,4 +112,3 @@ docker run --rm -v "${PWD}/outputs:/app/outputs" presight-etl:latest
 # Or run using Docker Compose override (Task 4.1 Bonus):
 docker-compose run --rm --build etl
 ```
-

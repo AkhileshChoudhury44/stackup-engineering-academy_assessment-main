@@ -75,9 +75,14 @@ FROM (
     SELECT unnest(generate_series(DATE '2020-01-01', DATE '2026-12-31', INTERVAL '1 DAY')) AS d
 );
 
--- Dimension: Employees (SCD Type 2: historical roles/levels/salaries + current source record)
+-- Dimension: Employees (Kimball SCD Type 2: historical roles/levels/salaries + current source record)
+-- 1. All career revisions from stg_salary_history form the chronological timeline.
+-- 2. Employees without salary history get a single version anchored to their hire_date.
+-- 3. Defensive reconciliation: If an employee's state in stg_employees has a newer salary/role
+--    not yet logged in history, it is conditionally appended without creating duplicate 1-day snapshots.
+-- 4. Temporal boundaries strictly use standard closed-open [valid_from, valid_to) intervals via LEAD().
 CREATE OR REPLACE TABLE dim_employee AS
-WITH history_versions AS (
+WITH history_records AS (
     SELECT 
         h.employee_id, 
         e.full_name, 
@@ -92,51 +97,80 @@ WITH history_versions AS (
         e.status,
         e.years_experience, 
         h.effective_date::DATE AS valid_from,
-        h.change_reason, 
-        FALSE AS supplied_current
+        h.change_reason
     FROM stg_salary_history h 
     JOIN stg_employees e USING (employee_id)
 ),
 latest_history AS (
     SELECT 
-        employee_id, 
-        max(effective_date::DATE) AS latest_effective_date
-    FROM stg_salary_history 
-    GROUP BY employee_id
+        employee_id,
+        new_salary::DOUBLE AS latest_salary,
+        new_role AS latest_role,
+        new_level AS latest_level,
+        effective_date::DATE AS latest_effective_date,
+        ROW_NUMBER() OVER (PARTITION BY employee_id ORDER BY effective_date::DATE DESC) AS rn
+    FROM stg_salary_history
 ),
-current_versions AS (
+employees_without_history AS (
+    -- Employees who have no records in stg_salary_history
     SELECT 
         e.employee_id, 
         e.full_name, 
         e.email, 
         e.department, 
         e.role, 
-        e.level,
+        e.level, 
         e.salary::DOUBLE AS salary, 
         e.manager_id, 
         e.region, 
         try_cast(e.hire_date AS DATE) AS hire_date,
         e.status, 
         e.years_experience,
-        coalesce(h.latest_effective_date + INTERVAL 1 DAY, try_cast(e.hire_date AS DATE), DATE '2000-01-01') AS valid_from,
-        'Current source record' AS change_reason, 
-        TRUE AS supplied_current
+        coalesce(try_cast(e.hire_date AS DATE), DATE '2020-01-01') AS valid_from,
+        'Initial Hire' AS change_reason
     FROM stg_employees e 
-    LEFT JOIN latest_history h USING (employee_id)
+    WHERE e.employee_id NOT IN (SELECT DISTINCT employee_id FROM history_records)
 ),
-versions AS (
-    SELECT * FROM history_versions 
+unrecorded_current_changes AS (
+    -- Defensive guard: Only appends a new version if employees.csv has changed since the latest history record
+    SELECT 
+        e.employee_id, 
+        e.full_name, 
+        e.email, 
+        e.department, 
+        e.role, 
+        e.level, 
+        e.salary::DOUBLE AS salary, 
+        e.manager_id, 
+        e.region, 
+        try_cast(e.hire_date AS DATE) AS hire_date,
+        e.status, 
+        e.years_experience,
+        lh.latest_effective_date + INTERVAL 1 DAY AS valid_from,
+        'Current Position' AS change_reason
+    FROM stg_employees e 
+    JOIN latest_history lh 
+      ON e.employee_id = lh.employee_id 
+     AND lh.rn = 1
+    WHERE e.salary::DOUBLE <> lh.latest_salary
+       OR e.role <> lh.latest_role
+       OR e.level <> lh.latest_level
+),
+all_snapshots AS (
+    SELECT * FROM history_records 
     UNION ALL 
-    SELECT * FROM current_versions
+    SELECT * FROM employees_without_history
+    UNION ALL 
+    SELECT * FROM unrecorded_current_changes
 ),
 dated AS (
     SELECT 
         *, 
-        lead(valid_from) OVER (PARTITION BY employee_id ORDER BY valid_from, supplied_current) AS next_valid_from
-    FROM versions
+        lead(valid_from) OVER (PARTITION BY employee_id ORDER BY valid_from) AS next_valid_from
+    FROM all_snapshots
 )
 SELECT 
-    row_number() OVER (ORDER BY employee_id, valid_from, supplied_current) AS employee_key,
+    row_number() OVER (ORDER BY employee_id, valid_from) AS employee_key,
     employee_id, 
     full_name, 
     email, 
@@ -144,13 +178,13 @@ SELECT
     role, 
     level, 
     salary, 
-    manager_id,
+    manager_id, 
     region, 
     hire_date, 
     status, 
     years_experience, 
     valid_from,
-    coalesce(next_valid_from - INTERVAL 1 DAY, DATE '9999-12-31') AS valid_to,
+    coalesce(next_valid_from, DATE '9999-12-31') AS valid_to,
     next_valid_from IS NULL AS is_current, 
     change_reason
 FROM dated;
