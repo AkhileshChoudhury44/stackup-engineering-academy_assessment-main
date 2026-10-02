@@ -1,0 +1,23 @@
+{
+  "run_timestamp": "2026-10-02T14:29:45.501698+00:00",
+  "total_messages_consumed": 1000,
+  "event_type_counts": {
+    "login": 248,
+    "task_created": 122,
+    "comment_added": 38,
+    "project_status_change": 81,
+    "logout": 180,
+    "document_uploaded": 59,
+    "meeting_scheduled": 41,
+    "budget_updated": 37,
+    "escalation_resolved": 21,
+    "approval_granted": 15,
+    "task_completed": 105,
+    "escalation_raised": 24,
+    "approval_requested": 21,
+    "approval_rejected": 6,
+    "milestone_reached": 2
+  },
+  "critical_escalations_forwarded": 2,
+  "throughput_messages_per_second": 7849.71
+}

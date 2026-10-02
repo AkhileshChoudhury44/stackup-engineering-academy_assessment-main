@@ -1,0 +1,50 @@
+================================================================================
+                  PRESIGHT FULL ETL PIPELINE RUN SUMMARY                        
+                  Pillar 2: SQL & Data Visualization — Task 2.2                 
+================================================================================
+
+1. RUN METADATA
+   - Run Timestamp:           2026-10-02 14:34:24 UTC
+   - Pipeline Execution Time: 0.52 seconds
+   - Performance SLA Status:  PASS (0.52s < 30.00s Target)
+
+2. DATASET ROW COUNTS (BEFORE VS. AFTER)
+   -----------------------------------------------------------------------------
+   Dataset         | Raw Input Rows | Cleaned Output Rows | Variance / Net Delta
+   -----------------------------------------------------------------------------
+   Projects        | 500            | 500                 | 0 (Schema Enriched)
+   Employees       | 1000           | 1000                | 0 (Deduplicated)
+   Transactions    | 50000          | 50000               | 0 (Preserved & Enriched)
+   -----------------------------------------------------------------------------
+
+3. DATA QUALITY DECISIONS MADE
+   A. Projects Dataset:
+      - Null budgets and actual costs defaulted to 0.0 to prevent NaN propagation.
+      - Validated and parsed start_date and end_date into ISO 8601 YYYY-MM-DD.
+      - Computed derived columns: budget_variance, is_over_budget, duration_days,
+        and budget_utilisation_pct (with zero-division protection).
+      - Standardized status strings and mapped to status_category: Active, Closed, Pending.
+      - Applied multi-factor risk_level classification (High, Medium, Low).
+
+   B. Employees Dataset:
+      - Dynamically generated collision-free emails (first.last@presight.ai) for missing values.
+      - Imputed unparseable/implausible hire dates using role/level median.
+      - Corrected negative years of experience using absolute value transformations.
+      - Reassigned self-referencing managers (employee_id == manager_id) to executive root EMP0000.
+      - Remediated Junior salary outliers (> 50,000 AED) to median Junior baseline.
+      - Filtered output strictly to the 12 canonical schema columns.
+
+   C. Transactions Dataset:
+      - Ingested 50,000 JSON records via vectorized pd.json_normalize without memory bloat.
+      - Replaced null transaction amounts with 0.0 in amount_aed.
+      - Retained null approved_by records with is_approved=False and labeled approver as
+        'Unassigned / Pending' to preserve financial auditability without record loss.
+      - Parsed transaction_date to ISO YYYY-MM-DD and derived transaction_year_month.
+      - Performed foreign key joins against dim_project and dim_employee with verified
+        zero row multiplication (cardinality strictly maintained at 50,000 rows).
+
+4. OUTPUT ARTIFACTS PERSISTED
+   - /app/outputs/projects_clean.csv
+   - /app/outputs/employees_clean.csv
+   - /app/outputs/transactions_clean.csv
+   - /app/outputs/pipeline_summary.txt

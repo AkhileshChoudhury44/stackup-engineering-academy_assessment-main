@@ -1,0 +1,14 @@
+Data Quality Report - Generated 2026-10-02T17:25:44.587941
+============================================================
+
+Projects processed: 500
+Employees processed: 1000
+
+Employee DQ Issues Identified & Remediated:
+  - missing_emails: 10 rows fixed
+  - invalid_hire_dates: 8 rows fixed
+  - implausible_hire_dates: 0 rows fixed
+  - negative_years_experience: 5 rows fixed
+  - employee_is_own_manager: 1 rows fixed
+  - salary_level_mismatches: 3 rows fixed
+  - duplicate_employee_ids: 0 rows fixed

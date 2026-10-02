@@ -1,0 +1,19 @@
+{
+    "duckdb.databases": [
+        {
+            "alias": "presight",
+            "type": "file",
+            "path": "./presight_warehouse.duckdb",
+            "readOnly": false,
+            "attached": true
+        }
+    ],
+    "workbench.editorAssociations": {
+        "*.copilotmd": "vscode.markdown.preview.editor",
+        "*.parquet": "duckdb.dataFileViewer",
+        "*.csv": "duckdb.dataFileViewer",
+        "*.tsv": "duckdb.dataFileViewer",
+        "*.xlsx": "duckdb.dataFileViewer"
+    },
+    "duckdb.defaultDatabase": "presight"
+}
