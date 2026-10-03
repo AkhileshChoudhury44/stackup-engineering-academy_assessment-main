@@ -37,7 +37,7 @@ docker compose run etl
 ### Key Engineering Highlights
 - **Image Optimization (< 250MB):** Separates build dependencies (gcc, build tools) in Stage 1 and copies only runtime artifacts into Stage 2.
 - **Security Hardening:** Enforces non-root user `presight:presight`.
-- **Healthcheck & Entrypoint:** Built-in Python healthcheck and default execution of `solutions/02_sql_and_viz/2.1_etl_full.py`.
+- **Healthcheck & Entrypoint:** Built-in Python healthcheck and default execution of `starter_files/etl_starter.py` (mandated by Task 4.1 Requirement 3).
 - **Compose Override Integration:** Automatically detected by Docker Compose; mounts output directory to `./outputs`.
 
 ---
