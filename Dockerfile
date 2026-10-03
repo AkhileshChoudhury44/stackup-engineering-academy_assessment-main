@@ -51,4 +51,4 @@ RUN mkdir -p /app/outputs && chmod 777 /app/outputs
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD python -c "import pandas, numpy, duckdb; print('Health OK')" || exit 1
 
-ENTRYPOINT ["python", "solutions/02_sql_and_viz/2.1_etl_full.py"]
+ENTRYPOINT ["python", "starter_files/etl_starter.py"]
