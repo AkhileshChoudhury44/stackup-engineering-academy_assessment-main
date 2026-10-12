@@ -1,0 +1,10 @@
+# Airflow Ignore List for /opt/airflow/dags (starter_files volume)
+# Prevents Airflow from parsing non-DAG starter templates and scratch scripts
+
+airflow_dag_starter.*
+etl_starter.*
+kafka_starter.*
+spark_starter.*
+data_model_starter.*
+*.pyc
+__pycache__

@@ -1,0 +1,39 @@
+# =============================================================
+
+# StackUp Engineering Academy — Data Engineering Assessment
+# Pillar 4: Infrastructure & Governance — Task 4.1 Bonus
+# Docker Compose Override for ETL Service & Airflow DAG Sync
+# Candidate: Akhilesh
+# Run: docker-compose run etl
+# =============================================================
+
+services:
+  etl:
+    profiles:
+      - tools
+      - etl
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: presight-etl:latest
+    container_name: presight-etl
+    user: "0:0"
+    environment:
+      - DATA_DIR=/app/datasets
+      - OUTPUT_DIR=/app/outputs
+    volumes:
+      - ./outputs:/app/outputs
+    networks:
+      - presight-net
+
+  airflow-webserver:
+    volumes:
+      - ./starter_files:/opt/airflow/dags
+      - ./solutions/submissions/Akhilesh/03_big_data/3.3_airflow_dag.py:/opt/airflow/dags/3.3_airflow_dag.py
+      - ./outputs:/opt/airflow/outputs
+
+  airflow-scheduler:
+    volumes:
+      - ./starter_files:/opt/airflow/dags
+      - ./solutions/submissions/Akhilesh/03_big_data/3.3_airflow_dag.py:/opt/airflow/dags/3.3_airflow_dag.py
+      - ./outputs:/opt/airflow/outputs
