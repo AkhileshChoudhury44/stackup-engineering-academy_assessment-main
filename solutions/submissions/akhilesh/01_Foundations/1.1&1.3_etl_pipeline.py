@@ -33,7 +33,15 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def load_projects(filepath: str) -> pd.DataFrame:
     """
-    Load projects.csv into a Pandas DataFrame with correct dtypes.
+    Load projects.csv into a DataFrame.
+
+    TODO:
+      - Load the CSV
+      - Parse date columns correctly (start_date, end_date)
+      - Add a derived column: budget_variance = actual_cost - budget
+      - Add a derived column: is_over_budget (True/False)
+      - Add a derived column: duration_days (end_date - start_date, where available)
+      - Return the cleaned DataFrame
     """
     logger.info("Loading projects data from: %s", filepath)
     df = pd.read_csv(filepath)
@@ -45,26 +53,45 @@ def load_projects(filepath: str) -> pd.DataFrame:
     # Parse dates
     df['start_date'] = pd.to_datetime(df['start_date'], errors='coerce')
     df['end_date'] = pd.to_datetime(df['end_date'], errors='coerce')
+
+    # Add derived columns per load_projects specification in etl_starter.py
+    df['budget_variance'] = df['actual_cost'] - df['budget']
+    df['is_over_budget'] = df['actual_cost'] > df['budget']
+    df['duration_days'] = (df['end_date'] - df['start_date']).dt.days
     
     return df
 
 
 def transform_projects(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Apply business logic transformations to projects DataFrame (Vectorized).
+    Apply business logic transformations to the projects DataFrame.
+
+    TODO:
+      - Standardise the 'status' column values (strip whitespace, title case)
+      - Replace any missing budget or actual_cost values with 0
+      - Add a 'status_category' column: group statuses into
+        ['Active', 'Closed', 'Pending'] using the mapping below:
+          Active  → In Progress
+          Closed  → Completed
+          Pending → Not Started, On Hold
+      - Add 'budget_utilisation_pct' (actual_cost / budget * 100) per Task 1.1
+      - Add 'risk_level' (High / Medium / Low) based on combined priority and budget logic
+      - Return the transformed DataFrame
     """
     logger.info("Transforming projects data (Vectorized)...")
     df = df.copy()
 
-    # 1. Budget variance = actual_cost - budget
-    df['budget_variance'] = df['actual_cost'] - df['budget']
-
-    # 2. is_over_budget = True if actual_cost > budget, else False
-    df['is_over_budget'] = df['actual_cost'] > df['budget']
-
-    # 3. duration_days = days between start_date and end_date where both exist
-    duration = (df['end_date'] - df['start_date']).dt.days
-    df['duration_days'] = duration
+    # Ensure baseline numeric types and derived columns are present
+    df['budget'] = pd.to_numeric(df.get('budget', 0.0), errors='coerce').fillna(0.0)
+    df['actual_cost'] = pd.to_numeric(df.get('actual_cost', 0.0), errors='coerce').fillna(0.0)
+    if 'budget_variance' not in df.columns:
+        df['budget_variance'] = df['actual_cost'] - df['budget']
+    if 'is_over_budget' not in df.columns:
+        df['is_over_budget'] = df['actual_cost'] > df['budget']
+    if 'duration_days' not in df.columns and 'start_date' in df.columns and 'end_date' in df.columns:
+        s_date = pd.to_datetime(df['start_date'], errors='coerce')
+        e_date = pd.to_datetime(df['end_date'], errors='coerce')
+        df['duration_days'] = (e_date - s_date).dt.days
 
     # 4. budget_utilisation_pct = actual_cost / budget * 100 (handle div-by-zero safely)
     df['budget_utilisation_pct'] = np.where(
@@ -73,7 +100,7 @@ def transform_projects(df: pd.DataFrame) -> pd.DataFrame:
         0.0
     )
 
-    # 5. Standardise status values
+    # 5. Standardise status column values (strip whitespace, title case)
     df['status'] = df['status'].astype(str).str.strip().str.title()
 
     # 6. Map status to status_category
@@ -85,7 +112,7 @@ def transform_projects(df: pd.DataFrame) -> pd.DataFrame:
     }
     df['status_category'] = df['status'].map(status_map).fillna("Pending")
 
-    # 7. Add risk_level based on combined logic:
+    # 7. Add derived risk_level based on combined logic:
     # High: priority == 'Critical' OR is_over_budget == True
     # Medium: priority == 'High' OR budget_utilisation_pct > 90
     # Low: otherwise
@@ -116,10 +143,11 @@ def load_employees(filepath: str) -> pd.DataFrame:
     return df
 
 
-def clean_employees(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def clean_employees(df: pd.DataFrame) -> pd.DataFrame:
     """
     Find and fix ALL data quality issues across employees.csv using vectorized logic.
-    Returns (cleaned_df, quality_report).
+    Returns cleaned DataFrame (matching etl_starter.py contract).
+    The detailed dq_report dictionary is attached to df.attrs['dq_report'].
     """
     logger.info("Detecting and fixing data quality issues in employees.csv...")
     df = df.copy()
@@ -225,9 +253,10 @@ def clean_employees(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         'status', 'years_experience'
     ]
     df = df[canonical_columns]
+    df.attrs['dq_report'] = dq_report
 
     logger.info("Employee cleaning complete. Total cleaned records: %d", len(df))
-    return df, dq_report
+    return df
 
 
 # ==============================================================================
@@ -250,7 +279,8 @@ def run_foundations_pipeline():
     # Task 1.3: Employees
     employees_file = os.path.join(DATA_DIR, "employees.csv")
     raw_employees = load_employees(employees_file)
-    clean_emp, dq_report = clean_employees(raw_employees)
+    clean_emp = clean_employees(raw_employees)
+    dq_report = clean_emp.attrs.get('dq_report', {})
     emp_out_path = os.path.join(OUTPUT_DIR, "employees_clean.csv")
     clean_emp.to_csv(emp_out_path, index=False)
     logger.info("Wrote clean employees to: %s", emp_out_path)

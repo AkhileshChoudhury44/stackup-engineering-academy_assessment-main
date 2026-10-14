@@ -3,7 +3,7 @@
 -- Pillar 2: SQL & Data Visualization — Task 2.3: Query Optimisation
 -- Trainee: Akhilesh
 -- Database Target: DuckDB / ANSI SQL (PostgreSQL compatible)
--- Prerequisite: Run 2.2_queries.sql (or 1.2_data_model.sql) to instantiate tables.
+-- Prerequisite: Run 1.2_data_model.sql to instantiate tables.
 -- Dataset scale: 500 projects, 2,826 employee versions (SCD2), 50,000 transactions.
 -- =============================================================
 

@@ -1,201 +1,17 @@
 -- =============================================================
 -- StackUp Engineering Academy — Data Engineering Assessment
--- Pillar 2: SQL & Data Visualization — Task 2.1 & 2.2: Business Queries & Star Schema
+-- Pillar 2: SQL & Data Visualization — Task 2.1: Six Business Queries
 -- Trainee: Akhilesh
--- Database Target: DuckDB / ANSI SQL
--- Run this file from the repository root so datasets/... paths resolve.
+-- Database Target: DuckDB / ANSI SQL (PostgreSQL compatible)
+--
+-- PREREQUISITE:
+--   The analytics warehouse star schema (dim_*, fact_*, bridge_*) is created
+--   and populated by running Pillar 1 Task 1.2:
+--     duckdb presight_warehouse.duckdb -f solutions/submissions/Akhilesh/01_foundations/1.2_data_model.sql
+--
+-- HOW TO RUN:
+--   duckdb presight_warehouse.duckdb -f solutions/submissions/Akhilesh/02_sql_and_viz/2.2_queries.sql
 -- =============================================================
-
--- Reset any earlier warehouse objects whose foreign keys depend on the dimensions.
-DROP TABLE IF EXISTS fact_transactions CASCADE;
-DROP TABLE IF EXISTS bridge_employee_project CASCADE;
-DROP TABLE IF EXISTS dim_project CASCADE;
-DROP TABLE IF EXISTS dim_employee CASCADE;
-DROP TABLE IF EXISTS dim_vendor CASCADE;
-DROP TABLE IF EXISTS dim_date CASCADE;
-
--- Staging tables: Declared as TEMP TABLES so they do NOT pollute the warehouse schema.
--- (The assignment strictly specifies only dim_*, fact_*, and bridge_* tables).
-CREATE OR REPLACE TEMP TABLE stg_projects AS
-SELECT * FROM read_csv_auto('datasets/projects.csv');
-
-CREATE OR REPLACE TEMP TABLE stg_employees AS
-SELECT * FROM read_csv_auto('datasets/employees.csv');
-
-CREATE OR REPLACE TEMP TABLE stg_salary_history AS
-SELECT * FROM read_csv_auto('datasets/employees_salary_history.csv');
-
-CREATE OR REPLACE TEMP TABLE stg_transactions AS
-SELECT * FROM read_json_auto('datasets/transactions.json');
-
--- Dimension: Projects
-CREATE OR REPLACE TABLE dim_project AS
-SELECT 
-    row_number() OVER (ORDER BY project_id) AS project_key,
-    project_id, 
-    project_name, 
-    department, 
-    trim(status) AS status,
-    trim(status) AS project_status,
-    CASE WHEN trim(status) = 'In Progress' THEN 'Active' ELSE 'Inactive' END AS status_category,
-    project_manager_id, 
-    priority, 
-    region,
-    coalesce(budget, 0)::DOUBLE AS budget,
-    coalesce(actual_cost, 0)::DOUBLE AS actual_cost
-FROM stg_projects;
-
--- Dimension: Vendors
-CREATE OR REPLACE TABLE dim_vendor AS
-SELECT 
-    row_number() OVER (ORDER BY vendor_id) AS vendor_key,
-    vendor_id, 
-    vendor_name, 
-    category
-FROM (
-    SELECT vendor_id, any_value(vendor_name) AS vendor_name, any_value(category) AS category
-    FROM stg_transactions 
-    GROUP BY vendor_id
-);
-
--- Dimension: Date (Calendar dimension 2020 through 2026)
-CREATE OR REPLACE TABLE dim_date AS
-SELECT
-    cast(strftime(d, '%Y%m%d') AS INT) AS date_key,
-    cast(d AS DATE) AS full_date,
-    extract(year FROM d) AS year,
-    extract(quarter FROM d) AS quarter,
-    extract(month FROM d) AS month,
-    strftime(d, '%B') AS month_name,
-    extract(week FROM d) AS week,
-    extract(day FROM d) AS day,
-    strftime(d, '%A') AS day_of_week,
-    CASE WHEN extract(dayofweek FROM d) IN (0, 6) THEN TRUE ELSE FALSE END AS is_weekend
-FROM (
-    SELECT unnest(generate_series(DATE '2020-01-01', DATE '2026-12-31', INTERVAL '1 DAY')) AS d
-);
-
--- Dimension: Employees (SCD Type 2: historical roles/levels/salaries + current source record)
-CREATE OR REPLACE TABLE dim_employee AS
-WITH history_versions AS (
-    SELECT 
-        h.employee_id, 
-        e.full_name, 
-        e.email, 
-        e.department,
-        h.new_role AS role, 
-        h.new_level AS level, 
-        h.new_salary::DOUBLE AS salary,
-        e.manager_id, 
-        e.region, 
-        try_cast(e.hire_date AS DATE) AS hire_date, 
-        e.status,
-        e.years_experience, 
-        h.effective_date::DATE AS valid_from,
-        h.change_reason, 
-        FALSE AS supplied_current
-    FROM stg_salary_history h 
-    JOIN stg_employees e USING (employee_id)
-),
-latest_history AS (
-    SELECT 
-        employee_id, 
-        max(effective_date::DATE) AS latest_effective_date
-    FROM stg_salary_history 
-    GROUP BY employee_id
-),
-current_versions AS (
-    SELECT 
-        e.employee_id, 
-        e.full_name, 
-        e.email, 
-        e.department, 
-        e.role, 
-        e.level,
-        e.salary::DOUBLE AS salary, 
-        e.manager_id, 
-        e.region, 
-        try_cast(e.hire_date AS DATE) AS hire_date,
-        e.status, 
-        e.years_experience,
-        coalesce(h.latest_effective_date + INTERVAL 1 DAY, try_cast(e.hire_date AS DATE), DATE '2000-01-01') AS valid_from,
-        'Current source record' AS change_reason, 
-        TRUE AS supplied_current
-    FROM stg_employees e 
-    LEFT JOIN latest_history h USING (employee_id)
-),
-versions AS (
-    SELECT * FROM history_versions 
-    UNION ALL 
-    SELECT * FROM current_versions
-),
-dated AS (
-    SELECT 
-        *, 
-        lead(valid_from) OVER (PARTITION BY employee_id ORDER BY valid_from, supplied_current) AS next_valid_from
-    FROM versions
-)
-SELECT 
-    row_number() OVER (ORDER BY employee_id, valid_from, supplied_current) AS employee_key,
-    employee_id, 
-    full_name, 
-    email, 
-    department, 
-    role, 
-    level, 
-    salary, 
-    manager_id,
-    region, 
-    hire_date, 
-    status, 
-    years_experience, 
-    valid_from,
-    coalesce(next_valid_from - INTERVAL 1 DAY, DATE '9999-12-31') AS valid_to,
-    next_valid_from IS NULL AS is_current, 
-    change_reason
-FROM dated;
-
--- Fact: Transactions (joined to dimensions with closed-open temporal SCD2 boundary)
-CREATE OR REPLACE TABLE fact_transactions AS
-SELECT 
-    row_number() OVER (ORDER BY t.transaction_id) AS transaction_key,
-    t.transaction_id, 
-    p.project_key, 
-    e.employee_key, 
-    v.vendor_key,
-    cast(strftime(t.transaction_date::DATE, '%Y%m%d') AS INTEGER) AS date_key,
-    coalesce(t.amount, 0)::DOUBLE AS amount, 
-    coalesce(t.amount, 0)::DOUBLE AS amount_aed,
-    t.category, 
-    t.payment_status,
-    t.transaction_date::DATE AS transaction_date
-FROM stg_transactions t
-JOIN dim_project p USING (project_id)
-JOIN dim_vendor v USING (vendor_id)
-LEFT JOIN dim_employee e 
-    ON e.employee_id = t.approved_by 
-   AND t.transaction_date::DATE >= e.valid_from 
-   AND t.transaction_date::DATE < e.valid_to;
-
-
--- Bridge: Employee-Project (Many-to-Many bridge as specified in Task 1.2)
-CREATE OR REPLACE TABLE bridge_employee_project AS
-SELECT 
-    row_number() OVER () AS bridge_key,
-    p.project_key,
-    e.employee_key,
-    'Project Manager' AS role_in_project,
-    100.0::DOUBLE AS allocation_pct
-FROM dim_project p
-JOIN dim_employee e 
-  ON e.employee_id = p.project_manager_id 
- AND e.is_current = TRUE;
-
--- Clean up temporary staging tables so warehouse only retains required schema tables
-DROP TABLE IF EXISTS stg_projects;
-DROP TABLE IF EXISTS stg_employees;
-DROP TABLE IF EXISTS stg_salary_history;
-DROP TABLE IF EXISTS stg_transactions;
 
 
 -- ===========================================================================
@@ -244,7 +60,7 @@ FROM dim_project p
 JOIN dim_employee e
   ON e.employee_id = p.project_manager_id 
  AND e.is_current = TRUE
-WHERE p.project_status = 'In Progress' 
+WHERE p.status = 'In Progress' 
    OR p.status_category = 'Active'
 GROUP BY e.full_name, e.email 
 HAVING count(p.project_key) > 3  -- Strict literal prompt filter (> 3 active projects; 0 rows in this dataset)
@@ -303,13 +119,13 @@ SELECT
     p.project_id, 
     p.project_name, 
     p.department, 
-    p.project_status,
+    p.status AS project_status,
     count(*) AS open_transaction_count, 
     round(sum(f.amount), 2) AS open_transaction_value
 FROM fact_transactions f 
 JOIN dim_project p USING (project_key)
 WHERE f.payment_status IN ('Pending', 'Disputed')
-GROUP BY p.project_id, p.project_name, p.department, p.project_status
+GROUP BY p.project_id, p.project_name, p.department, p.status
 HAVING sum(f.amount) > 50000.0 
 ORDER BY open_transaction_value DESC;
 
@@ -320,10 +136,11 @@ ORDER BY open_transaction_value DESC;
 -- ---------------------------------------------------------------------------
 WITH monthly AS (
     SELECT 
-        strftime(transaction_date, '%Y-%m') AS year_month, 
-        category, 
-        sum(amount) AS monthly_spend
-    FROM fact_transactions 
+        strftime(d.full_date, '%Y-%m') AS year_month, 
+        f.category, 
+        sum(f.amount) AS monthly_spend
+    FROM fact_transactions f
+    JOIN dim_date d ON f.date_key = d.date_key
     GROUP BY 1, 2
 ),
 monthly_metrics AS (
